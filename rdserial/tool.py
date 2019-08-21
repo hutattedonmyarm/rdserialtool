@@ -124,19 +124,18 @@ class RDSerialTool:
             level=logging_level,
         )
 
-    def main(self,
-            bluetooth_address = None,
-            device=None,
-            connect_delay=None,
-            bluetooth_port=None,
-            callback=None,
-            quiet=None,
-            debug=None,
-            baud=None,
-            write_json=None,
-            watch=None,
-            watch_seconds=None,
-            trend_points=None):
+    def _setup_args(self,
+                    bluetooth_address,
+                    device,
+                    connect_delay,
+                    bluetooth_port,
+                    quiet,
+                    debug,
+                    baud,
+                    write_json,
+                    watch,
+                    watch_seconds,
+                    trend_points):
         address_required = bluetooth_address is None
         device_required = device is None
         self.args = parse_args(address_required=address_required, command_required=device_required)
@@ -163,6 +162,33 @@ class RDSerialTool:
             self.args.trend_points = trend_points
         if bluetooth_port is not None:
             self.args.bluetooth_port = bluetooth_port
+
+    def main(self,
+             bluetooth_address=None,
+             device=None,
+             connect_delay=None,
+             bluetooth_port=None,
+             callback=None,
+             quiet=None,
+             debug=None,
+             baud=None,
+             write_json=None,
+             watch=None,
+             watch_seconds=None,
+             trend_points=None):
+        """Connects to the specified device"""
+
+        self._setup_args(bluetooth_address,
+                         device,
+                         connect_delay,
+                         bluetooth_port,
+                         quiet,
+                         debug,
+                         baud,
+                         write_json,
+                         watch,
+                         watch_seconds,
+                         trend_points)
         self._setup_logging()
 
         logging.info('rdserialtool %s', __version__)
@@ -176,7 +202,9 @@ class RDSerialTool:
                 baudrate=self.args.baud,
             )
         else:
-            logging.info('Connecting to {} {}'.format(self.args.command.upper(), self.args.bluetooth_address))
+            logging.info('Connecting to %s %s',
+                         self.args.command.upper(),
+                         self.args.bluetooth_address)
             self.socket = rdserial.device.Bluetooth(
                 self.args.bluetooth_address,
                 port=self.args.bluetooth_port,
@@ -196,6 +224,7 @@ class RDSerialTool:
         return ret
 
 def main(**kwargs):
+    """Runs the tool"""
     return RDSerialTool().main(**kwargs)
 
 

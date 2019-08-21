@@ -20,8 +20,10 @@
 
 import json
 import os
+import sys
 
 def response_callback(response):
+    """Callback from the serial device, data formatted as json"""
     json_file = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'charge.json')
     print(json_file)
     history = []
@@ -35,6 +37,7 @@ def response_callback(response):
         json.dump(history, file)
 
 def get_config():
+    """Reads the device config"""
     json_file = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'config.json')
     try:
         with open(json_file, 'r') as file:
@@ -42,9 +45,12 @@ def get_config():
     except IOError as ioerror:
         print(f'Error reading config: {ioerror}', file=sys.stderr)
         return {}
-if __name__ == '__main__':
-    import sys
+
+def main():
+    """Runs the tool"""
     import rdserial.tool
     config = get_config()
     sys.exit(rdserial.tool.main(callback=response_callback,
                                 **config))
+if __name__ == '__main__':
+    main()
