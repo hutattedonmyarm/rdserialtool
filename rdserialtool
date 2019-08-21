@@ -18,7 +18,33 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
 # 02110-1301, USA.
 
+import json
+import os
+
+def response_callback(response):
+    json_file = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'charge.json')
+    print(json_file)
+    history = []
+    try:
+        with open(json_file, 'r') as file:
+            history = json.load(file)
+    except IOError:
+        pass
+    history.append(json.loads(response))
+    with open(json_file, 'w') as file:
+        json.dump(history, file)
+
+def get_config():
+    json_file = os.path.join(os.path.dirname(os.path.realpath(sys.argv[0])), 'config.json')
+    try:
+        with open(json_file, 'r') as file:
+            return json.load(file)
+    except IOError as ioerror:
+        print(f'Error reading config: {ioerror}', file=sys.stderr)
+        return {}
 if __name__ == '__main__':
     import sys
     import rdserial.tool
-    sys.exit(rdserial.tool.main())
+    config = get_config()
+    sys.exit(rdserial.tool.main(callback=response_callback,
+                                **config))

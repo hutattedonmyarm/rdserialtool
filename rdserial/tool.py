@@ -27,8 +27,7 @@ import rdserial.device
 import rdserial.um.tool
 import rdserial.dps.tool
 
-
-def parse_args(argv=None):
+def parse_args(argv=None, address_required=True, command_required=True):
     """Parse user arguments."""
     if argv is None:
         argv = sys.argv
@@ -58,15 +57,16 @@ def parse_args(argv=None):
         help='Print extra debugging information.',
     )
 
-    device_group = parser.add_mutually_exclusive_group(required=True)
-    device_group.add_argument(
-        '--bluetooth-address', '-b',
-        help='Bluetooth EUI-48 address of the device',
-    )
-    device_group.add_argument(
-        '--serial-device', '-s',
-        help='Serial filename (e.g. /dev/rfcomm0) of the device',
-    )
+    if address_required:
+        device_group = parser.add_mutually_exclusive_group(required=True)
+        device_group.add_argument(
+            '--bluetooth-address', '-b',
+            help='Bluetooth EUI-48 address of the device',
+        )
+        device_group.add_argument(
+            '--serial-device', '-s',
+            help='Serial filename (e.g. /dev/rfcomm0) of the device',
+        )
 
     parser.add_argument(
         '--bluetooth-port', type=int, default=1,
@@ -103,14 +103,14 @@ def parse_args(argv=None):
 
     args = parser.parse_args(args=argv[1:])
 
-    if args.command is None:
+    if command_required and args.command is None:
         parser.error('Command required')
 
     return args
 
-
 class RDSerialTool:
-    def setup_logging(self):
+    """Main class to interface with the device"""
+    def _setup_logging(self):
         logging_format = '%(message)s'
         if self.args.debug:
             logging_level = logging.DEBUG
@@ -124,16 +124,53 @@ class RDSerialTool:
             level=logging_level,
         )
 
-    def main(self):
-        self.args = parse_args()
-        self.setup_logging()
+    def main(self,
+            bluetooth_address = None,
+            device=None,
+            connect_delay=None,
+            bluetooth_port=None,
+            callback=None,
+            quiet=None,
+            debug=None,
+            baud=None,
+            write_json=None,
+            watch=None,
+            watch_seconds=None,
+            trend_points=None):
+        address_required = bluetooth_address is None
+        device_required = device is None
+        self.args = parse_args(address_required=address_required, command_required=device_required)
+        if not address_required:
+            self.args.bluetooth_address = bluetooth_address
+            self.args.serial_device = None
+        if not device_required:
+            self.args.command = device
+        if connect_delay is not None:
+            self.args.connect_delay = connect_delay
+        if quiet is not None:
+            self.args.quiet = quiet
+        if debug is not None:
+            self.args.debug = debug
+        if baud is not None:
+            self.args.baud = baud
+        if write_json is not None:
+            self.args.json = write_json
+        if watch is not None:
+            self.args.watch = watch
+        if watch_seconds is not None:
+            self.args.watch_seconds = watch_seconds
+        if trend_points is not None:
+            self.args.trend_points = trend_points
+        if bluetooth_port is not None:
+            self.args.bluetooth_port = bluetooth_port
+        self._setup_logging()
 
-        logging.info('rdserialtool {}'.format(__version__))
+        logging.info('rdserialtool %s', __version__)
         logging.info('Copyright (C) 2019 Ryan Finnie')
         logging.info('')
 
         if self.args.serial_device:
-            logging.info('Connecting to {} {}'.format(self.args.command.upper(), self.args.serial_device))
+            logging.info('Connecting to %s %s', self.args.command.upper(), self.args.serial_device)
             self.socket = rdserial.device.Serial(
                 self.args.serial_device,
                 baudrate=self.args.baud,
@@ -150,17 +187,16 @@ class RDSerialTool:
         time.sleep(self.args.connect_delay)
 
         if self.args.command in ('um24c', 'um25c', 'um34c'):
-            tool = rdserial.um.tool.Tool(self)
+            tool = rdserial.um.tool.Tool(self, callback)
         elif self.args.command == 'dps':
-            tool = rdserial.dps.tool.Tool(self)
+            tool = rdserial.dps.tool.Tool(self, callback)
         ret = tool.main()
 
         self.socket.close()
         return ret
 
-
-def main():
-    return RDSerialTool().main()
+def main(**kwargs):
+    return RDSerialTool().main(**kwargs)
 
 
 if __name__ == '__main__':

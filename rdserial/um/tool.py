@@ -1,4 +1,4 @@
-# rdserialtool
+ # rdserialtool
 # Copyright (C) 2019 Ryan Finnie
 #
 # This program is free software; you can redistribute it and/or
@@ -92,12 +92,40 @@ def add_subparsers(subparsers):
         )
 
 
-class Tool:
+class ToolModule:
     def __init__(self, parent=None):
         self.trends = {}
         if parent is not None:
             self.args = parent.args
             self.socket = parent.socket
+            self.device = parent.device
+
+    def loop(self):
+        while True:
+            try:
+                self.socket.send(b'\xf0')
+                resp = rdserial.um.Response(
+                        self.socket.recv(130),
+                        collection_time=datetime.datetime.now(),
+                        device_type=self.device.upper(),
+                    )
+            except KeyboardInterrupt:
+                raise
+            except Exception:
+                raise
+            if self.args.watch:
+                if not self.args.json:
+                    print()
+                time.sleep(self.args.watch_seconds)
+            else:
+                return
+class Tool:
+    def __init__(self, parent=None, callback=None):
+        self.trends = {}
+        if parent is not None:
+            self.args = parent.args
+            self.socket = parent.socket
+        self.callback = callback
 
     def trend_s(self, name, value):
         if not self.args.watch:
@@ -116,11 +144,26 @@ class Tool:
             self.trends[name] = [value for x in range(self.args.trend_points)]
             return ' '
 
-    def print_json(self, response):
+    def get_json(self, response):
         out = {x: getattr(response, x) for x in response.field_properties}
         out['data_groups'] = [{'amp_hours': x.amp_hours, 'watt_hours': x.watt_hours} for x in response.data_groups]
         out['collection_time'] = (response.collection_time - datetime.datetime.fromtimestamp(0)).total_seconds()
-        print(json.dumps(out, sort_keys=True))
+        charging_map = {
+            rdserial.um.CHARGING_UNKNOWN: 'Unknown / Normal',
+            rdserial.um.CHARGING_QC2: 'Quick Charge 2.0',
+            rdserial.um.CHARGING_QC3: 'Quick Charge 3.0',
+            rdserial.um.CHARGING_APP2_4A: 'Apple 2.4A',
+            rdserial.um.CHARGING_APP2_1A: 'Apple 2.1A',
+            rdserial.um.CHARGING_APP1_0A: 'Apple 1.0A',
+            rdserial.um.CHARGING_APP0_5A: 'Apple 0.5A',
+            rdserial.um.CHARGING_DCP1_5A: 'DCP 1.5A',
+            rdserial.um.CHARGING_SAMSUNG: 'Samsung',
+        }
+        out['charging_mode_pretty'] = charging_map[response.charging_mode]
+        return json.dumps(out, sort_keys=True)
+
+    def print_json(self, response):
+        print(self.get_json(response))
 
     def print_human(self, response):
         logging.debug('DUMP: {}'.format(repr(response.dump())))
@@ -243,18 +286,17 @@ class Tool:
         while True:
             try:
                 self.socket.send(b'\xf0')
+                response = rdserial.um.Response(
+                    self.socket.recv(130),
+                    collection_time=datetime.datetime.now(),
+                    device_type=self.args.command.upper(),
+                )
+                if self.callback:
+                    self.callback(self.get_json(response))
                 if self.args.json:
-                    self.print_json(rdserial.um.Response(
-                        self.socket.recv(130),
-                        collection_time=datetime.datetime.now(),
-                        device_type=self.args.command.upper(),
-                    ))
+                    self.print_json(response)
                 else:
-                    self.print_human(rdserial.um.Response(
-                        self.socket.recv(130),
-                        collection_time=datetime.datetime.now(),
-                        device_type=self.args.command.upper(),
-                    ))
+                    self.print_human(response)
             except KeyboardInterrupt:
                 raise
             except Exception:

@@ -121,8 +121,9 @@ def add_subparsers(subparsers):
 
 
 class Tool:
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, callback=None):
         self.trends = {}
+        self.callback = callback
         if parent is not None:
             self.args = parent.args
             self.socket = parent.socket
@@ -278,13 +279,16 @@ class Tool:
             print('    Maintain output state: {}'.format(device_group_state.maintain_output))
             print('    Output on power-on: {}'.format(device_group_state.poweron_output))
 
-    def print_json(self, device_state):
+    def get_json(self, device_state):
         out = {x: getattr(device_state, x) for x in device_state.register_properties}
         out['collection_time'] = (device_state.collection_time - datetime.datetime.fromtimestamp(0)).total_seconds()
         out['groups'] = {}
         for group, device_group_state in device_state.groups.items():
             out['groups'][group] = {x: getattr(device_group_state, x) for x in device_group_state.register_properties}
         print(json.dumps(out, sort_keys=True))
+
+    def print_json(self, device_state):
+        print(self.get_json(device_state))
 
     def assemble_device_state(self):
         device_state = rdserial.dps.DeviceState()
@@ -313,6 +317,8 @@ class Tool:
         while True:
             try:
                 device_state = self.assemble_device_state()
+                if self.callback:
+                    self.callback(self.get_json(device_state))
                 if self.args.json:
                     self.print_json(device_state)
                 else:
